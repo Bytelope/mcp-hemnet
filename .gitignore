@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.png
+*.log
+.DS_Store
+.env
+.playwright-mcp/
+*.iml
+.idea/

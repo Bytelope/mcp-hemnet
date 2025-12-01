@@ -1,0 +1,31 @@
+{
+  "name": "mcp-hemnet",
+  "version": "1.0.0",
+  "description": "MCP server for searching Hemnet.se real estate listings",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mcp-hemnet": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "mcp",
+    "hemnet",
+    "real-estate",
+    "sweden"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "playwright": "^1.49.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}
