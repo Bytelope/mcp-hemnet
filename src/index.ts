@@ -146,20 +146,95 @@ async function findLocationId(location: string): Promise<LocationResult | null> 
   return null;
 }
 
-function buildSearchUrl(
-  locationId: string,
-  minRooms?: number,
-  maxPrice?: number
-): string {
-  const params = new URLSearchParams();
-  params.append("location_ids[]", locationId);
+interface SearchOptions {
+  locationId: string;
+  minRooms?: number;
+  maxRooms?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  minArea?: number;
+  maxArea?: number;
+  maxFee?: number;
+  propertyTypes?: string[];
+  newConstruction?: "show" | "only" | "hide";
+  keywords?: string;
+  openHouse?: "today" | "tomorrow" | "weekend";
+  hasBalcony?: boolean;
+  hasElevator?: boolean;
+  daysListed?: number;
+  sortOrder?: string;
+}
 
-  if (minRooms) {
-    params.append("rooms_min", String(minRooms));
+// Property type mappings
+const PROPERTY_TYPES: Record<string, string> = {
+  "villa": "villa",
+  "house": "villa",
+  "apartment": "lagenhet",
+  "lägenhet": "lagenhet",
+  "townhouse": "radhus",
+  "radhus": "radhus",
+  "holiday": "fritidsboende",
+  "fritidshus": "fritidsboende",
+  "plot": "tomt",
+  "tomt": "tomt",
+  "farm": "gard",
+  "gård": "gard",
+};
+
+// Sort order mappings
+const SORT_ORDERS: Record<string, string> = {
+  "newest": "newest",
+  "oldest": "oldest",
+  "cheapest": "price_asc",
+  "expensive": "price_desc",
+  "largest": "size_desc",
+  "smallest": "size_asc",
+  "lowest_fee": "fee_asc",
+  "highest_fee": "fee_desc",
+};
+
+function buildSearchUrl(options: SearchOptions): string {
+  const params = new URLSearchParams();
+  params.append("location_ids[]", options.locationId);
+
+  if (options.minRooms) params.append("rooms_min", String(options.minRooms));
+  if (options.maxRooms) params.append("rooms_max", String(options.maxRooms));
+  if (options.minPrice) params.append("price_min", String(options.minPrice));
+  if (options.maxPrice) params.append("price_max", String(options.maxPrice));
+  if (options.minArea) params.append("living_area_min", String(options.minArea));
+  if (options.maxArea) params.append("living_area_max", String(options.maxArea));
+  if (options.maxFee) params.append("fee_max", String(options.maxFee));
+
+  if (options.propertyTypes && options.propertyTypes.length > 0) {
+    for (const type of options.propertyTypes) {
+      const mapped = PROPERTY_TYPES[type.toLowerCase()] || type;
+      params.append("item_types[]", mapped);
+    }
   }
 
-  if (maxPrice) {
-    params.append("price_max", String(maxPrice));
+  if (options.newConstruction) {
+    const ncMap = { show: "1", only: "2", hide: "0" };
+    params.append("new_construction", ncMap[options.newConstruction]);
+  }
+
+  if (options.keywords) params.append("keywords", options.keywords);
+
+  if (options.openHouse) {
+    const ohMap = { today: "today", tomorrow: "tomorrow", weekend: "weekend" };
+    params.append("upcoming_open_house", ohMap[options.openHouse]);
+  }
+
+  if (options.hasBalcony) params.append("balcony", "1");
+  if (options.hasElevator) params.append("elevator", "1");
+
+  if (options.daysListed) {
+    const daysMap: Record<number, string> = { 1: "1d", 3: "3d", 7: "1w", 14: "2w", 30: "1m" };
+    params.append("published", daysMap[options.daysListed] || String(options.daysListed));
+  }
+
+  if (options.sortOrder) {
+    const mapped = SORT_ORDERS[options.sortOrder.toLowerCase()] || options.sortOrder;
+    params.append("order", mapped);
   }
 
   return `https://www.hemnet.se/bostader?${params.toString()}`;
@@ -167,8 +242,7 @@ function buildSearchUrl(
 
 async function searchHemnet(
   location: string,
-  minRooms?: number,
-  maxPrice?: number
+  options: Partial<Omit<SearchOptions, "locationId">> = {}
 ): Promise<{ listings: Listing[]; locationName: string }> {
   // Find location ID
   const locationResult = await findLocationId(location);
@@ -179,7 +253,7 @@ async function searchHemnet(
     );
   }
 
-  const searchUrl = buildSearchUrl(locationResult.id, minRooms, maxPrice);
+  const searchUrl = buildSearchUrl({ locationId: locationResult.id, ...options });
   const ctx = await getBrowserContext();
   const page = await ctx.newPage();
   page.setDefaultTimeout(3000); // 3 second timeout for all operations
@@ -499,58 +573,94 @@ server.tool(
       .number()
       .optional()
       .describe("Minimum number of rooms (e.g., 2 for at least 2 rooms)"),
+    max_rooms: z
+      .number()
+      .optional()
+      .describe("Maximum number of rooms"),
+    min_price: z
+      .number()
+      .optional()
+      .describe("Minimum price in SEK"),
     max_price: z
       .number()
       .optional()
-      .describe(
-        "Maximum price in SEK (e.g., 3000000 for max 3 million SEK)"
-      ),
+      .describe("Maximum price in SEK (e.g., 3000000 for max 3 million SEK)"),
+    min_area: z
+      .number()
+      .optional()
+      .describe("Minimum living area in m²"),
+    max_area: z
+      .number()
+      .optional()
+      .describe("Maximum living area in m²"),
+    max_fee: z
+      .number()
+      .optional()
+      .describe("Maximum monthly fee in SEK (for apartments)"),
+    property_types: z
+      .array(z.string())
+      .optional()
+      .describe("Property types: 'villa', 'apartment', 'townhouse', 'holiday', 'plot', 'farm'"),
+    new_construction: z
+      .enum(["show", "only", "hide"])
+      .optional()
+      .describe("Filter new construction: 'show' (include), 'only' (only new), 'hide' (exclude)"),
+    keywords: z
+      .string()
+      .optional()
+      .describe("Keywords to search for (e.g., 'pool', 'fireplace', 'garage')"),
+    open_house: z
+      .enum(["today", "tomorrow", "weekend"])
+      .optional()
+      .describe("Filter by upcoming open house viewings"),
+    has_balcony: z
+      .boolean()
+      .optional()
+      .describe("Require balcony/patio/terrace"),
+    has_elevator: z
+      .boolean()
+      .optional()
+      .describe("Require elevator"),
+    days_listed: z
+      .number()
+      .optional()
+      .describe("Max days listed on Hemnet (1, 3, 7, 14, or 30)"),
+    sort_by: z
+      .enum(["newest", "oldest", "cheapest", "expensive", "largest", "smallest", "lowest_fee", "highest_fee"])
+      .optional()
+      .describe("Sort order for results"),
   },
-  async ({ location, min_rooms, max_price }) => {
+  async ({ location, min_rooms, max_rooms, min_price, max_price, min_area, max_area, max_fee, property_types, new_construction, keywords, open_house, has_balcony, has_elevator, days_listed, sort_by }) => {
     try {
-      const { listings, locationName } = await searchHemnet(
-        location,
-        min_rooms,
-        max_price
-      );
+      const { listings, locationName } = await searchHemnet(location, {
+        minRooms: min_rooms,
+        maxRooms: max_rooms,
+        minPrice: min_price,
+        maxPrice: max_price,
+        minArea: min_area,
+        maxArea: max_area,
+        maxFee: max_fee,
+        propertyTypes: property_types,
+        newConstruction: new_construction,
+        keywords,
+        openHouse: open_house,
+        hasBalcony: has_balcony,
+        hasElevator: has_elevator,
+        daysListed: days_listed,
+        sortOrder: sort_by,
+      });
 
-      if (listings.length === 0) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `No listings found in ${locationName}${min_rooms ? ` with at least ${min_rooms} rooms` : ""}${max_price ? ` under ${max_price.toLocaleString("sv-SE")} kr` : ""}. Try broader search criteria.`,
-            },
-          ],
-        };
-      }
-
-      const filterInfo = [
-        min_rooms ? `${min_rooms}+ rooms` : null,
-        max_price ? `max ${max_price.toLocaleString("sv-SE")} kr` : null,
-      ]
-        .filter(Boolean)
-        .join(", ");
-
-      const resultText = listings
-        .map((l, i) => {
-          return `### ${i + 1}. ${l.title || "Property"}
-
-**Price:** ${l.price || "Contact for price"}
-**Rooms:** ${l.rooms || "N/A"} | **Area:** ${l.area || "N/A"} | **Monthly fee:** ${l.monthlyFee || "N/A"}
-
-${l.description ? `> ${l.description}` : ""}
-
-🔗 ${l.url}
-`;
-        })
-        .join("\n---\n\n");
+      const result = {
+        location: locationName,
+        count: listings.length,
+        listings,
+      };
 
       return {
         content: [
           {
             type: "text" as const,
-            text: `# ${listings.length} listings in ${locationName}${filterInfo ? ` (${filterInfo})` : ""}\n\n${resultText}`,
+            text: JSON.stringify(result, null, 2),
           },
         ],
       };
@@ -559,7 +669,7 @@ ${l.description ? `> ${l.description}` : ""}
         content: [
           {
             type: "text" as const,
-            text: `Error searching Hemnet: ${error instanceof Error ? error.message : String(error)}`,
+            text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
           },
         ],
         isError: true,
@@ -575,15 +685,14 @@ server.tool(
   {},
   async () => {
     const locations = Object.entries(COMMON_LOCATIONS)
-      .map(([name, id]) => `- ${name.charAt(0).toUpperCase() + name.slice(1)} (ID: ${id})`)
-      .sort()
-      .join("\n");
+      .map(([name, id]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), id }))
+      .sort((a, b) => a.name.localeCompare(b.name));
 
     return {
       content: [
         {
           type: "text" as const,
-          text: `# Supported Hemnet Locations\n\nThese locations have quick lookup support:\n\n${locations}\n\n*You can also search for any Swedish municipality by name.*`,
+          text: JSON.stringify({ locations, note: "You can also search for any Swedish municipality by name." }, null, 2),
         },
       ],
     };
@@ -603,76 +712,11 @@ server.tool(
     try {
       const details = await getListingDetails(url);
 
-      const viewingInfo = details.viewingTimes.length > 0
-        ? details.viewingTimes.map(t => `- ${t}`).join("\n")
-        : "No scheduled viewings";
-
-      const coordsText = details.coordinates
-        ? `${details.coordinates.lat}, ${details.coordinates.lng}`
-        : "N/A";
-
-      const featuresText = [
-        details.hasFloorPlan ? "Floor plan available" : null,
-        details.hasBankIdBidding ? "BankID bidding" : null,
-      ].filter(Boolean).join(", ") || "None";
-
-      const resultText = `# ${details.title}
-**${details.location}**
-
-## Price & Financing
-| | |
-|---|---|
-| **Asking price** | ${details.price || "Contact agent"} |
-| **Price per m²** | ${details.pricePerSqm || "N/A"} |
-| **Min. down payment** | ${details.downPayment || "N/A"} |
-| **Monthly fee** | ${details.monthlyFee || "N/A"} |
-| **Running costs** | ${details.runningCosts || "N/A"} |
-
-## Area Market Data
-| | |
-|---|---|
-| **Price trend (12 mo)** | ${details.areaPriceTrend || "N/A"} |
-| **Avg. price/m² in area** | ${details.areaAvgPricePerSqm || "N/A"} |
-| **This listing** | ${details.pricePerSqm || "N/A"} |
-
-## Property Details
-| Feature | Value |
-|---------|-------|
-| Type | ${details.propertyType || "N/A"} |
-| Tenure | ${details.tenureType || "N/A"} |
-| Rooms | ${details.rooms || "N/A"} |
-| Area | ${details.area || "N/A"} |
-| Floor | ${details.floor || "N/A"} |
-| Balcony | ${details.balcony || "N/A"} |
-| Patio | ${details.patio || "N/A"} |
-| Build year | ${details.buildYear || "N/A"} |
-| Energy class | ${details.energyClass || "N/A"} |
-
-## Description
-${details.description || "No description available."}
-
-## Viewing Times
-${viewingInfo}
-
-## Agent
-- **Name:** ${details.agentName || "N/A"}
-- **Agency:** ${details.agentAgency || "N/A"}
-
-## Additional Info
-- **Photos:** ${details.imageCount} images
-- **Page visits:** ${details.visitCount || "N/A"}
-- **Distance to water:** ${details.distanceToWater || "N/A"}
-- **Coordinates:** ${coordsText}
-- **Features:** ${featuresText}
-
-🔗 ${url}
-`;
-
       return {
         content: [
           {
             type: "text" as const,
-            text: resultText,
+            text: JSON.stringify({ ...details, url }, null, 2),
           },
         ],
       };
@@ -681,7 +725,7 @@ ${viewingInfo}
         content: [
           {
             type: "text" as const,
-            text: `Error fetching listing details: ${error instanceof Error ? error.message : String(error)}`,
+            text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
           },
         ],
         isError: true,
