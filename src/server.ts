@@ -430,10 +430,22 @@ async function searchHemnet(
         const areaMatch = allText.match(/(\d+)\s*m²/);
         const feeMatch = allText.match(/(\d[\d\s]*)\s*kr\/mån/);
 
-        // Extract thumbnail image URL
-        const imgEl = $el.find("img").first();
-        let imageUrl = imgEl.attr("src") || imgEl.attr("data-src") || "";
-        if (imageUrl && !imageUrl.startsWith("http")) imageUrl = "";
+        // Extract thumbnail image URL (check src, srcset, data-src — Hemnet lazy-loads)
+        let imageUrl = "";
+        $el.find("img").each((_j, imgNode) => {
+          if (imageUrl) return false; // already found one
+          const src = $(imgNode).attr("src") || "";
+          const srcset = $(imgNode).attr("srcset") || "";
+          const dataSrc = $(imgNode).attr("data-src") || "";
+          // First srcset entry (highest priority — often has real URL before lazy load)
+          const srcsetFirst = srcset.split(",")[0]?.trim().split(/\s+/)[0] || "";
+          for (const candidate of [src, srcsetFirst, dataSrc]) {
+            if (candidate.startsWith("http") && candidate.includes("hemnet")) {
+              imageUrl = candidate;
+              return false;
+            }
+          }
+        });
 
         if (title || href) {
           listings.push({
