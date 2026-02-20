@@ -268,7 +268,7 @@ async function findLocationId(
 // ---------- URL builders ----------
 
 interface SearchOptions {
-  locationId: string;
+  locationId?: string;
   minRooms?: number;
   maxRooms?: number;
   minPrice?: number;
@@ -287,7 +287,7 @@ interface SearchOptions {
 }
 
 interface SoldSearchOptions {
-  locationId: string;
+  locationId?: string;
   minRooms?: number;
   maxRooms?: number;
   minPrice?: number;
@@ -300,7 +300,7 @@ interface SoldSearchOptions {
 
 function buildSearchUrl(options: SearchOptions): string {
   const params = new URLSearchParams();
-  params.append("location_ids[]", options.locationId);
+  if (options.locationId) params.append("location_ids[]", options.locationId);
 
   if (options.minRooms) params.append("rooms_min", String(options.minRooms));
   if (options.maxRooms) params.append("rooms_max", String(options.maxRooms));
@@ -358,7 +358,7 @@ function buildSearchUrl(options: SearchOptions): string {
 
 function buildSoldSearchUrl(options: SoldSearchOptions): string {
   const params = new URLSearchParams();
-  params.append("location_ids[]", options.locationId);
+  if (options.locationId) params.append("location_ids[]", options.locationId);
 
   if (options.minRooms) params.append("rooms_min", String(options.minRooms));
   if (options.maxRooms) params.append("rooms_max", String(options.maxRooms));
@@ -388,19 +388,25 @@ function buildSoldSearchUrl(options: SoldSearchOptions): string {
 // ---------- Scrapers ----------
 
 async function searchHemnet(
-  location: string,
+  location: string | null,
   options: Partial<Omit<SearchOptions, "locationId">> = {}
 ): Promise<{ listings: Listing[]; locationName: string }> {
-  const locationResult = await findLocationId(location);
+  let locationId: string | undefined;
+  let locationName = "Sverige";
 
-  if (!locationResult) {
-    throw new Error(
-      `Could not find location "${location}". Try a Swedish municipality name like "Stockholm", "Göteborg", or "Upplands Väsby".`
-    );
+  if (location) {
+    const locationResult = await findLocationId(location);
+    if (!locationResult) {
+      throw new Error(
+        `Could not find location "${location}". Try a Swedish municipality name like "Stockholm", "Göteborg", or "Upplands Väsby".`
+      );
+    }
+    locationId = locationResult.id;
+    locationName = locationResult.name;
   }
 
   const searchUrl = buildSearchUrl({
-    locationId: locationResult.id,
+    locationId,
     ...options,
   });
   const html = await fetchPage(searchUrl);
@@ -465,7 +471,7 @@ async function searchHemnet(
             area: areaMatch ? areaMatch[0] : "",
             monthlyFee: feeMatch ? feeMatch[0] : "",
             description,
-            location: locationResult.name,
+            location: locationName,
             imageUrl,
           });
         }
@@ -474,23 +480,29 @@ async function searchHemnet(
       }
     });
 
-  return { listings, locationName: locationResult.name };
+  return { listings, locationName };
 }
 
 async function searchSoldHemnet(
-  location: string,
+  location: string | null,
   options: Partial<Omit<SoldSearchOptions, "locationId">> = {}
 ): Promise<{ listings: SoldListing[]; locationName: string }> {
-  const locationResult = await findLocationId(location);
+  let locationId: string | undefined;
+  let locationName = "Sverige";
 
-  if (!locationResult) {
-    throw new Error(
-      `Could not find location "${location}". Try a Swedish municipality name like "Stockholm", "Göteborg", or "Upplands Väsby".`
-    );
+  if (location) {
+    const locationResult = await findLocationId(location);
+    if (!locationResult) {
+      throw new Error(
+        `Could not find location "${location}". Try a Swedish municipality name like "Stockholm", "Göteborg", or "Upplands Väsby".`
+      );
+    }
+    locationId = locationResult.id;
+    locationName = locationResult.name;
   }
 
   const searchUrl = buildSoldSearchUrl({
-    locationId: locationResult.id,
+    locationId,
     ...options,
   });
   const html = await fetchPage(searchUrl);
@@ -578,7 +590,7 @@ async function searchSoldHemnet(
         if (title || href) {
           listings.push({
             address: title,
-            location: locationResult.name,
+            location: locationName,
             soldPrice,
             priceChangePercent,
             saleDate,
@@ -598,7 +610,7 @@ async function searchSoldHemnet(
       }
     });
 
-  return { listings, locationName: locationResult.name };
+  return { listings, locationName };
 }
 
 async function getListingDetails(url: string): Promise<ListingDetails> {
@@ -853,8 +865,9 @@ export function createMcpServer(): McpServer {
     {
       location: z
         .string()
+        .optional()
         .describe(
-          "Swedish location/municipality to search (e.g., 'Upplands Väsby', 'Stockholm', 'Göteborg')"
+          "Swedish location/municipality to search (e.g., 'Stockholm', 'Göteborg'). Omit for nationwide search."
         ),
       min_rooms: z
         .number()
@@ -897,7 +910,7 @@ export function createMcpServer(): McpServer {
         .string()
         .optional()
         .describe(
-          "Keywords to search for (e.g., 'pool', 'fireplace', 'garage')"
+          "Keywords to search for — property subtypes (slott, herrgård, torp, stuga, penthouse, vindsvåning) or features (pool, öppen spis, sjötomt, havsutsikt, garage)"
         ),
       open_house: z
         .enum(["today", "tomorrow", "weekend"])
@@ -928,7 +941,7 @@ export function createMcpServer(): McpServer {
     },
     async (args) => {
       try {
-        const result = await searchHemnet(args.location, {
+        const result = await searchHemnet(args.location || null, {
           minRooms: args.min_rooms,
           maxRooms: args.max_rooms,
           minPrice: args.min_price,
@@ -1042,8 +1055,9 @@ export function createMcpServer(): McpServer {
     {
       location: z
         .string()
+        .optional()
         .describe(
-          "Swedish location/municipality to search (e.g., 'Upplands Väsby', 'Stockholm', 'Göteborg')"
+          "Swedish location/municipality to search (e.g., 'Stockholm', 'Göteborg'). Omit for nationwide search."
         ),
       min_rooms: z.number().optional().describe("Minimum number of rooms"),
       max_rooms: z.number().optional().describe("Maximum number of rooms"),
@@ -1084,7 +1098,7 @@ export function createMcpServer(): McpServer {
     },
     async (args) => {
       try {
-        const result = await searchSoldHemnet(args.location, {
+        const result = await searchSoldHemnet(args.location || null, {
           minRooms: args.min_rooms,
           maxRooms: args.max_rooms,
           minPrice: args.min_price,
