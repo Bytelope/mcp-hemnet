@@ -216,13 +216,12 @@ async function fetchJson(url: string): Promise<unknown> {
 
   // Fallback: fetch via browser renderer and extract JSON from page
   const html = await fetchViaRenderer(url);
-  // The rendered page might contain just JSON text
-  const jsonMatch = html.match(/<(?:pre|body)[^>]*>([\s\S]*?)<\/(?:pre|body)>/i);
-  if (jsonMatch) {
+  const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+  if (preMatch) {
     try {
-      return JSON.parse(jsonMatch[1].trim());
+      return JSON.parse(preMatch[1].trim());
     } catch {
-      // Not valid JSON in the body
+      // Not valid JSON in pre tag
     }
   }
   throw new Error(`Could not extract JSON from ${url}`);
