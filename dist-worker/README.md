@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "mcp-hemnet" generated at 2026-02-20T09:34:01.756Z.
