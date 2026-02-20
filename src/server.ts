@@ -13,6 +13,7 @@ interface Listing {
   monthlyFee: string;
   description: string;
   location: string;
+  imageUrl: string;
 }
 
 interface ListingDetails {
@@ -35,7 +36,9 @@ interface ListingDetails {
   viewingTimes: string[];
   agentName: string;
   agentAgency: string;
+  brokerUrl: string;
   imageCount: number;
+  imageUrls: string[];
   visitCount: string;
   distanceToWater: string;
   downPayment: string;
@@ -427,6 +430,11 @@ async function searchHemnet(
         const areaMatch = allText.match(/(\d+)\s*m²/);
         const feeMatch = allText.match(/(\d[\d\s]*)\s*kr\/mån/);
 
+        // Extract thumbnail image URL
+        const imgEl = $el.find("img").first();
+        let imageUrl = imgEl.attr("src") || imgEl.attr("data-src") || "";
+        if (imageUrl && !imageUrl.startsWith("http")) imageUrl = "";
+
         if (title || href) {
           listings.push({
             title,
@@ -439,6 +447,7 @@ async function searchHemnet(
             monthlyFee: feeMatch ? feeMatch[0] : "",
             description,
             location: locationResult.name,
+            imageUrl,
           });
         }
       } catch {
@@ -680,11 +689,19 @@ async function getListingDetails(url: string): Promise<ListingDetails> {
   }
 
   let agentAgency = "";
+  let brokerUrl = "";
   const agencyLink = $(
-    'a[href*="/maklare/"]:not([href*="/salda"]) p'
+    'a[href*="/maklare/"]:not([href*="/salda"])'
   ).first();
   if (agencyLink.length) {
-    agentAgency = agencyLink.text().trim();
+    const agencyP = agencyLink.find("p").first();
+    if (agencyP.length) agentAgency = agencyP.text().trim();
+    const agencyHref = agencyLink.attr("href");
+    if (agencyHref) {
+      brokerUrl = agencyHref.startsWith("http")
+        ? agencyHref
+        : `https://www.hemnet.se${agencyHref}`;
+    }
   }
   if (!agentAgency) {
     const agencyEl = $(
@@ -693,6 +710,24 @@ async function getListingDetails(url: string): Promise<ListingDetails> {
     if (agencyEl.length) {
       agentAgency = agencyEl.text().trim();
     }
+  }
+
+  // Extract image URLs from listing gallery
+  const imageUrls: string[] = [];
+  $('img[src*="bilder.hemnet.se"], img[src*="images.hemnet.se"]').each((_i, el) => {
+    const src = $(el).attr("src");
+    if (src && !imageUrls.includes(src) && imageUrls.length < 10) {
+      imageUrls.push(src);
+    }
+  });
+  // Also check for data-src (lazy loaded) and srcset
+  if (imageUrls.length === 0) {
+    $('img[data-src*="hemnet"]').each((_i, el) => {
+      const src = $(el).attr("data-src");
+      if (src && !imageUrls.includes(src) && imageUrls.length < 10) {
+        imageUrls.push(src);
+      }
+    });
   }
 
   let imageCount = 0;
@@ -771,7 +806,9 @@ async function getListingDetails(url: string): Promise<ListingDetails> {
     viewingTimes,
     agentName,
     agentAgency,
+    brokerUrl,
     imageCount,
+    imageUrls,
     visitCount,
     distanceToWater,
     downPayment,
