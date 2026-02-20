@@ -428,7 +428,14 @@ async function searchHemnet(
         const priceMatch = allText.match(/(\d[\d\s]*\d)\s*kr(?!\/)/);
         const roomsMatch = allText.match(/(\d+)\s*rum/);
         const areaMatch = allText.match(/(\d+)\s*m²/);
-        const feeMatch = allText.match(/(\d[\d\s]*)\s*kr\/mån/);
+        // Extract fee from individual text nodes to avoid adjacent digits merging
+        let feeMatch: RegExpMatchArray | null = null;
+        $el.find("*").each((_j, node) => {
+          if (feeMatch) return false;
+          const nodeText = $(node).contents().filter(function() { return this.type === "text"; }).text();
+          const m = nodeText.match(/(\d[\d\s]*)\s*kr\/mån/);
+          if (m) { feeMatch = m; return false; }
+        });
 
         // Extract thumbnail image URL (check src, srcset, data-src — Hemnet lazy-loads)
         let imageUrl = "";
