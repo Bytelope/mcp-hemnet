@@ -479,8 +479,11 @@ async function _searchHemnetUncached(
         const roomsStr = urlRoomsMatch ? `${urlRoomsMatch[1]} rum` : textRoomsMatch ? textRoomsMatch[0] : "";
         // Area: search structured text only (excludes description which often mentions biarea)
         const areaAfterRoom = structuredText.match(/rum\b[^a-zA-Z]*?(\d+(?:[,+.]\d+)?)\s*m²/);
-        const areaGeneric = structuredText.match(/(\d+)\s*m²/);
-        const areaStr = areaAfterRoom ? `${areaAfterRoom[1]} m²` : areaGeneric ? areaGeneric[0] : "";
+        const areaGeneric = structuredText.match(/(\d+(?:[,+.]\d+)?)\s*m²/);
+        const rawArea = areaAfterRoom ? areaAfterRoom[1] : areaGeneric ? areaGeneric[1] : "";
+        // Sanity: skip areas < 10 m² (scraper artifact from decimal parsing like "62,5" → "5")
+        const areaNum = parseFloat(rawArea.replace(",", ".").replace("+", "."));
+        const areaStr = !isNaN(areaNum) && areaNum >= 10 ? `${rawArea} m²` : "";
         // Extract fee from individual text nodes to avoid adjacent digits merging
         let feeMatch: RegExpMatchArray | null = null;
         $el.find("*").each((_j, node) => {
