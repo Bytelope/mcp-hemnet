@@ -538,6 +538,28 @@ async function _searchHemnetUncached(
     return true;
   });
 
+  // Filter by property type if specified (Hemnet may include ads/promoted listings of other types)
+  const requestedTypes = options.propertyTypes;
+  if (requestedTypes && requestedTypes.length > 0) {
+    const urlPatterns: Record<string, string> = {
+      villa: "/villa-",
+      bostadsratt: "/lagenhet-",
+      radhus: "/radhus-",
+      fritidsboende: "/fritidshus-",
+      tomt: "/tomt-",
+      gard: "/gard-",
+    };
+    const patterns = requestedTypes
+      .map((t) => urlPatterns[PROPERTY_TYPES[t.toLowerCase()] || t])
+      .filter(Boolean);
+    if (patterns.length > 0) {
+      const filtered = dedupedListings.filter((l) =>
+        patterns.some((p) => l.url.includes(p))
+      );
+      if (filtered.length > 0) return { listings: filtered, locationName };
+    }
+  }
+
   return { listings: dedupedListings, locationName };
 }
 
