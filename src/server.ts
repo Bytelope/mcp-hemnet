@@ -62,6 +62,7 @@ interface SoldListing {
   propertyType: string;
   agency: string;
   url: string;
+  imageUrl: string;
 }
 
 interface LocationResult {
@@ -667,6 +668,22 @@ async function searchSoldHemnet(
         const dateMatch = allText.match(/Såld\s+(\d+\s+\w+\.?\s+\d{4})/);
         const saleDate = dateMatch ? dateMatch[1].trim() : "";
 
+        // Extract thumbnail image URL
+        let imageUrl = "";
+        $el.find("img").each((_j, imgNode) => {
+          if (imageUrl) return false;
+          const src = $(imgNode).attr("src") || "";
+          const srcset = $(imgNode).attr("srcset") || "";
+          const dataSrc = $(imgNode).attr("data-src") || "";
+          const srcsetFirst = srcset.split(",")[0]?.trim().split(/\s+/)[0] || "";
+          for (const candidate of [src, srcsetFirst, dataSrc]) {
+            if (candidate.startsWith("http") && candidate.includes("hemnet")) {
+              imageUrl = candidate;
+              return false;
+            }
+          }
+        });
+
         if (title || href) {
           listings.push({
             address: title,
@@ -683,6 +700,7 @@ async function searchSoldHemnet(
             url: href.startsWith("http")
               ? href
               : `https://www.hemnet.se${href}`,
+            imageUrl,
           });
         }
       } catch {
