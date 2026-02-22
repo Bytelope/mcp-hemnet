@@ -471,7 +471,10 @@ async function _searchHemnetUncached(
 
         const priceMatch = allText.match(/(\d[\d\s]*\d)\s*kr(?!\/)/);
         const roomsMatch = allText.match(/(\d+)\s*rum/);
-        const areaMatch = allText.match(/(\d+)\s*m²/);
+        // Prefer area near "rum" context (e.g. "3 rum · 72 m²") to avoid grabbing balcony/utility sizes
+        const areaAfterRoom = allText.match(/rum\b[^a-zA-Z]*?(\d+(?:[,+.]\d+)?)\s*m²/);
+        const areaGeneric = allText.match(/(\d+)\s*m²/);
+        const areaStr = areaAfterRoom ? `${areaAfterRoom[1]} m²` : areaGeneric ? areaGeneric[0] : "";
         // Extract fee from individual text nodes to avoid adjacent digits merging
         let feeMatch: RegExpMatchArray | null = null;
         $el.find("*").each((_j, node) => {
@@ -506,7 +509,7 @@ async function _searchHemnetUncached(
               : `https://www.hemnet.se${href}`,
             price: priceMatch ? priceMatch[0].trim() : "",
             rooms: roomsMatch ? roomsMatch[0] : "",
-            area: areaMatch ? areaMatch[0] : "",
+            area: areaStr,
             monthlyFee: feeMatch ? feeMatch[0] : "",
             description,
             location: locationName,
