@@ -602,23 +602,23 @@ async function searchSoldHemnet(
         }
 
         const roomsMatch = allText.match(/(\d+(?:[,.]\d+)?)\s*rum/);
-        const rooms = roomsMatch ? roomsMatch[1] : "";
+        const rooms = roomsMatch ? `${roomsMatch[1]} rum` : "";
 
         let area = "";
         $el.find("p").each((_j, pEl) => {
           const pText = $(pEl).text().trim();
-          const areaOnly = pText.match(/^(\d+(?:[+,]\d+)?)\s*m²$/);
+          const areaOnly = pText.match(/^(\d+(?:,\d+)?)\s*(?:\+\d+\s*)?m²$/);
           if (areaOnly) {
-            area = areaOnly[0];
+            area = `${areaOnly[1]} m²`;
             return false;
           }
         });
         if (!area) {
           const areaFallback = allText.match(
-            /(\d+(?:\+\d+)?(?:,\d+)?)\s*m²(?!\s*Slutpris)/
+            /(\d+(?:,\d+)?)\s*(?:\+\d+\s*)?m²(?!\s*Slutpris)/
           );
           if (areaFallback && !areaFallback[0].includes("kr")) {
-            area = areaFallback[0];
+            area = `${areaFallback[1]} m²`;
           }
         }
 
