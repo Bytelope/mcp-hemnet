@@ -568,6 +568,16 @@ async function searchSoldHemnet(
   location: string | null,
   options: Partial<Omit<SoldSearchOptions, "locationId">> = {}
 ): Promise<{ listings: SoldListing[]; locationName: string }> {
+  const cacheKey = `sold:${JSON.stringify({ location, ...options })}`;
+  return getOrFetch(cacheKey, TTL.SEARCH, () =>
+    _searchSoldHemnetUncached(location, options)
+  );
+}
+
+async function _searchSoldHemnetUncached(
+  location: string | null,
+  options: Partial<Omit<SoldSearchOptions, "locationId">> = {}
+): Promise<{ listings: SoldListing[]; locationName: string }> {
   let locationId: string | undefined;
   let locationName = "Sverige";
 
