@@ -985,6 +985,14 @@ export function createMcpServer(): McpServer {
         ])
         .optional()
         .describe("Sort order for results"),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(25)
+        .optional()
+        .default(10)
+        .describe("Maximum number of results to return (1-25, default 10)"),
     },
     async (args) => {
       try {
@@ -1006,6 +1014,8 @@ export function createMcpServer(): McpServer {
           sortOrder: args.sort_by,
         });
 
+        const limited = result.listings.slice(0, args.limit);
+
         return {
           content: [
             {
@@ -1013,8 +1023,8 @@ export function createMcpServer(): McpServer {
               text: JSON.stringify(
                 {
                   location: result.locationName,
-                  count: result.listings.length,
-                  listings: result.listings,
+                  count: limited.length,
+                  listings: limited,
                 },
                 null,
                 2
@@ -1142,6 +1152,14 @@ export function createMcpServer(): McpServer {
         ])
         .optional()
         .describe("Sort order for results"),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(25)
+        .optional()
+        .default(10)
+        .describe("Maximum number of results to return (1-25, default 10)"),
     },
     async (args) => {
       try {
@@ -1156,6 +1174,8 @@ export function createMcpServer(): McpServer {
           sortOrder: args.sort_by,
         });
 
+        const limited = result.listings.slice(0, args.limit);
+
         return {
           content: [
             {
@@ -1163,8 +1183,8 @@ export function createMcpServer(): McpServer {
               text: JSON.stringify(
                 {
                   location: result.locationName,
-                  count: result.listings.length,
-                  listings: result.listings,
+                  count: limited.length,
+                  listings: limited,
                 },
                 null,
                 2
