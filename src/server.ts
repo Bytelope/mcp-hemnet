@@ -530,7 +530,15 @@ async function _searchHemnetUncached(
       }
     });
 
-  return { listings, locationName };
+  // Deduplicate by URL (Hemnet sometimes shows the same listing twice)
+  const seen = new Set<string>();
+  const dedupedListings = listings.filter((l) => {
+    if (seen.has(l.url)) return false;
+    seen.add(l.url);
+    return true;
+  });
+
+  return { listings: dedupedListings, locationName };
 }
 
 async function searchSoldHemnet(
