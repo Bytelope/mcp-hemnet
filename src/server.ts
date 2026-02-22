@@ -504,7 +504,7 @@ async function _searchHemnetUncached(
           // First srcset entry (highest priority — often has real URL before lazy load)
           const srcsetFirst = srcset.split(",")[0]?.trim().split(/\s+/)[0] || "";
           for (const candidate of [src, srcsetFirst, dataSrc]) {
-            if (candidate.startsWith("http") && candidate.includes("hemnet")) {
+            if (candidate.startsWith("http") && /bilder\.hemnet\.se|images\.hemnet\.se/.test(candidate)) {
               imageUrl = candidate;
               return false;
             }
@@ -687,7 +687,7 @@ async function _searchSoldHemnetUncached(
           const dataSrc = $(imgNode).attr("data-src") || "";
           const srcsetFirst = srcset.split(",")[0]?.trim().split(/\s+/)[0] || "";
           for (const candidate of [src, srcsetFirst, dataSrc]) {
-            if (candidate.startsWith("http") && candidate.includes("hemnet")) {
+            if (candidate.startsWith("http") && /bilder\.hemnet\.se|images\.hemnet\.se/.test(candidate)) {
               imageUrl = candidate;
               return false;
             }
