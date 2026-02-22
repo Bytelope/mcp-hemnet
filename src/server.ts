@@ -473,9 +473,9 @@ async function _searchHemnetUncached(
         const structuredText = allText.replace(description, "");
 
         const priceMatch = structuredText.match(/(\d[\d\s]*\d)\s*kr(?!\/)/);
-        // Primary: extract rooms from URL (canonical, e.g. "villa-5rum") — fallback to text
-        const urlRoomsMatch = href.match(/bostad\/\w+-(\d+)rum/);
-        const textRoomsMatch = structuredText.match(/(\d+)\s*rum/);
+        // Primary: extract rooms from URL (canonical, e.g. "villa-5rum" or "lagenhet-2,5rum") — fallback to text
+        const urlRoomsMatch = href.match(/bostad\/\w+-(\d+(?:[,.]\d+)?)rum/);
+        const textRoomsMatch = structuredText.match(/(\d+(?:[,.]\d+)?)\s*rum/);
         const roomsStr = urlRoomsMatch ? `${urlRoomsMatch[1]} rum` : textRoomsMatch ? textRoomsMatch[0] : "";
         // Area: search structured text only (excludes description which often mentions biarea)
         const areaAfterRoom = structuredText.match(/rum\b[^a-zA-Z]*?(\d+(?:[,+.]\d+)?)\s*m²/);
