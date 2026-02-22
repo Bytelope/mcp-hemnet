@@ -469,11 +469,17 @@ async function _searchHemnetUncached(
           .trim()
           .substring(0, 200);
 
-        const priceMatch = allText.match(/(\d[\d\s]*\d)\s*kr(?!\/)/);
-        const roomsMatch = allText.match(/(\d+)\s*rum/);
-        // Prefer area near "rum" context (e.g. "3 rum · 72 m²") to avoid grabbing balcony/utility sizes
-        const areaAfterRoom = allText.match(/rum\b[^a-zA-Z]*?(\d+(?:[,+.]\d+)?)\s*m²/);
-        const areaGeneric = allText.match(/(\d+)\s*m²/);
+        // Use text WITHOUT description for structured data extraction (avoids grabbing biarea/description values)
+        const structuredText = allText.replace(description, "");
+
+        const priceMatch = structuredText.match(/(\d[\d\s]*\d)\s*kr(?!\/)/);
+        // Primary: extract rooms from URL (canonical, e.g. "villa-5rum") — fallback to text
+        const urlRoomsMatch = href.match(/bostad\/\w+-(\d+)rum/);
+        const textRoomsMatch = structuredText.match(/(\d+)\s*rum/);
+        const roomsStr = urlRoomsMatch ? `${urlRoomsMatch[1]} rum` : textRoomsMatch ? textRoomsMatch[0] : "";
+        // Area: search structured text only (excludes description which often mentions biarea)
+        const areaAfterRoom = structuredText.match(/rum\b[^a-zA-Z]*?(\d+(?:[,+.]\d+)?)\s*m²/);
+        const areaGeneric = structuredText.match(/(\d+)\s*m²/);
         const areaStr = areaAfterRoom ? `${areaAfterRoom[1]} m²` : areaGeneric ? areaGeneric[0] : "";
         // Extract fee from individual text nodes to avoid adjacent digits merging
         let feeMatch: RegExpMatchArray | null = null;
@@ -508,7 +514,7 @@ async function _searchHemnetUncached(
               ? href
               : `https://www.hemnet.se${href}`,
             price: priceMatch ? priceMatch[0].trim() : "",
-            rooms: roomsMatch ? roomsMatch[0] : "",
+            rooms: roomsStr,
             area: areaStr,
             monthlyFee: feeMatch ? feeMatch[0] : "",
             description,
