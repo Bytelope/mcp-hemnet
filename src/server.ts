@@ -138,6 +138,31 @@ const SORT_ORDERS: Record<string, string> = {
   highest_fee: "fee_desc",
 };
 
+// ---------- In-memory cache with TTL ----------
+
+const cache = new Map<string, { data: unknown; expires: number }>();
+
+function getOrFetch<T>(
+  key: string,
+  ttlMs: number,
+  fetchFn: () => Promise<T>
+): Promise<T> {
+  const cached = cache.get(key);
+  if (cached && cached.expires > Date.now()) {
+    return Promise.resolve(cached.data as T);
+  }
+  return fetchFn().then((data) => {
+    cache.set(key, { data, expires: Date.now() + ttlMs });
+    return data;
+  });
+}
+
+const TTL = {
+  LOCATION: 24 * 60 * 60 * 1000, // 24 hours
+  SEARCH: 10 * 60 * 1000, // 10 minutes
+  LISTING: 60 * 60 * 1000, // 1 hour
+} as const;
+
 // ---------- HTTP helpers ----------
 
 // Browser render service URL (set via BROWSER_RENDER_URL env var)
@@ -245,24 +270,27 @@ async function findLocationId(
     };
   }
 
-  try {
-    const data = (await fetchJson(
-      `https://www.hemnet.se/locations/show?q=${encodeURIComponent(location)}&h=1`
-    )) as Array<{ id: number; name: string; location_type?: string }>;
+  const cacheKey = `location:${normalized}`;
+  return getOrFetch<LocationResult | null>(cacheKey, TTL.LOCATION, async () => {
+    try {
+      const data = (await fetchJson(
+        `https://www.hemnet.se/locations/show?q=${encodeURIComponent(location)}&h=1`
+      )) as Array<{ id: number; name: string; location_type?: string }>;
 
-    if (Array.isArray(data) && data.length > 0) {
-      const first = data[0];
-      return {
-        id: String(first.id),
-        name: first.name || location,
-        type: first.location_type || "unknown",
-      };
+      if (Array.isArray(data) && data.length > 0) {
+        const first = data[0];
+        return {
+          id: String(first.id),
+          name: first.name || location,
+          type: first.location_type || "unknown",
+        };
+      }
+    } catch {
+      // Autocomplete failed
     }
-  } catch {
-    // Autocomplete failed
-  }
 
-  return null;
+    return null;
+  });
 }
 
 // ---------- URL builders ----------
@@ -388,6 +416,16 @@ function buildSoldSearchUrl(options: SoldSearchOptions): string {
 // ---------- Scrapers ----------
 
 async function searchHemnet(
+  location: string | null,
+  options: Partial<Omit<SearchOptions, "locationId">> = {}
+): Promise<{ listings: Listing[]; locationName: string }> {
+  const cacheKey = `search:${JSON.stringify({ location, ...options })}`;
+  return getOrFetch(cacheKey, TTL.SEARCH, () =>
+    _searchHemnetUncached(location, options)
+  );
+}
+
+async function _searchHemnetUncached(
   location: string | null,
   options: Partial<Omit<SearchOptions, "locationId">> = {}
 ): Promise<{ listings: Listing[]; locationName: string }> {
@@ -620,6 +658,15 @@ async function getListingDetails(url: string): Promise<ListingDetails> {
     );
   }
 
+  const cacheKey = `listing:${url}`;
+  return getOrFetch(cacheKey, TTL.LISTING, () =>
+    _getListingDetailsUncached(url)
+  );
+}
+
+async function _getListingDetailsUncached(
+  url: string
+): Promise<ListingDetails> {
   const html = await fetchPage(url);
   const $ = cheerio.load(html);
 
